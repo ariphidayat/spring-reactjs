@@ -1,0 +1,36 @@
+{
+  "name": "spring-reactjs",
+  "version": "1.0.0",
+  "description": "Spring Data REST and React",
+  "main": "index.js",
+  "scripts": {
+    "watch": "webpack --watch -d"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/ariphidayat/spring-reactjs.git"
+  },
+  "keywords": [
+    "spring",
+    "react"
+  ],
+  "author": "Arip Hidayat",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/ariphidayat/spring-reactjs/issues"
+  },
+  "homepage": "https://github.com/ariphidayat/spring-reactjs#readme",
+  "dependencies": {
+    "react": "^15.4.2",
+    "react-dom": "^15.4.2",
+    "rest": "^2.0.0",
+    "webpack": "^2.2.1"
+  },
+  "devDependencies": {
+    "babel-core": "^6.24.0",
+    "babel-loader": "^6.4.1",
+    "babel-polyfill": "^6.23.0",
+    "babel-preset-es2015": "^6.24.0",
+    "babel-preset-react": "^6.23.0"
+  }
+}
