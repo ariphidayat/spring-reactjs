@@ -32,11 +32,26 @@ class App extends React.Component {
                 path: employeeCollection.entity._links.profile.href,
                 headers: {'Accept': 'application/schema+json'}
             }).then(schema => {
+                /**
+                 * Filter unneeded JSON Schema properties, like uri references and
+                 * subtypes ($ref).
+                 */
+                Object.keys(schema.entity.properties).forEach(function (property) {
+                    if (schema.entity.properties[property].hasOwnProperty('format') &&
+                        schema.entity.properties[property].format === 'uri') {
+                        delete schema.entity.properties[property];
+                    }
+                    else if (schema.entity.properties[property].hasOwnProperty('$ref')) {
+                        delete schema.entity.properties[property];
+                    }
+                });
+
                 this.schema = schema.entity;
                 this.links = employeeCollection.entity._links;
                 return employeeCollection;
             });
         }).then(employeeCollection => {
+            this.page = employeeCollection.entity.page;
             return employeeCollection.entity._embedded.employees.map(employee =>
                 client({
                     method: 'GET',
@@ -47,6 +62,7 @@ class App extends React.Component {
             return when.all(employeePromises);
         }).then(employees => {
             this.setState({
+                page: this.page,
                 employees: employees,
                 attributes: Object.keys(this.schema.properties),
                 pageSize: pageSize,
@@ -56,7 +72,7 @@ class App extends React.Component {
     }
 
     onCreate(newEmployee) {
-        follow(client, root, ['employees']).done(response => {
+        follow(client, root, ['employees']).then(response => {
             client({
                 method: 'POST',
                 path: response.entity._links.self.href,
@@ -76,8 +92,11 @@ class App extends React.Component {
                 'If-Match': employee.headers.Etag
             }
         }).then(response => {
-            this.loadFromServer(this.state.pageSize);
+            /* Let the websocket handler update the state */
         }, response => {
+            if (response.status.code === 403) {
+                alert('ACCESS DENIED: You are not authorized to update ' + employee.entity._links.self.href);
+            }
             if (response.status.code === 412) {
                 alert('DENIED: Unable to update ' + employee.entity._links.self.href + '. Your copy is stale.');
             }
@@ -85,8 +104,13 @@ class App extends React.Component {
     }
 
     onDelete(employee) {
-        client({method: 'DELETE', path: employee.entity._links.self.href}).then(response => {
-            this.loadFromServer(this.state.pageSize);
+        client({method: 'DELETE', path: employee.entity._links.self.href}
+        ).then(response => {
+            /* let the websocket handle updating the UI */
+        }, response => {
+            if (response.status.code === 403) {
+                alert('ACCESS DENIED: You are not authorized to delete ' + employee.entity._links.self.href);
+            }
         });
     }
 
@@ -96,6 +120,7 @@ class App extends React.Component {
             path: navUri
         }).then(employeeCollection => {
             this.links = employeeCollection.entity._links;
+            this.page = employeeCollection.entity.page;
 
             return employeeCollection.entity._embedded.employees.map(employee =>
                 client({
@@ -107,6 +132,7 @@ class App extends React.Component {
             return when.all(employeePromises);
         }).then(employees => {
             this.setState({
+                page: this.page,
                 employees: employees,
                 attributes: Object.keys(this.schema.properties),
                 pageSize: this.state.pageSize,
@@ -125,7 +151,7 @@ class App extends React.Component {
         follow(client, root, [{
             rel: 'employees',
             params: {size: this.state.pageSize}
-        }]).done(response => {
+        }]).then(response => {
             if (response.entity._links.last !== undefined) {
                 this.onNavigate(response.entity._links.last.href);
             } else {
@@ -177,7 +203,8 @@ class App extends React.Component {
         return (
             <div>
                 <CreateDialog attributes={this.state.attributes} onCreate={this.onCreate}/>
-                <EmployeeList employees={this.state.employees}
+                <EmployeeList page={this.state.page}
+                              employees={this.state.employees}
                               links={this.state.links}
                               pageSize={this.state.pageSize}
                               attributes={this.state.attributes}
@@ -233,6 +260,9 @@ class EmployeeList extends React.Component {
     }
 
     render() {
+        var pageInfo = this.props.page.hasOwnProperty("number") ?
+            <h3>Employees - Page {this.props.page.number + 1} of {this.props.page.totalPages}</h3> : null;
+
         var employees = this.props.employees.map(employee =>
             <Employee key={employee.entity._links.self.href}
                       employee={employee}
@@ -257,6 +287,7 @@ class EmployeeList extends React.Component {
 
         return (
             <div>
+                {pageInfo}
                 <input ref="pageSize" defaultValue={this.props.pageSize} onInput={this.handleInput}/>
                 <table>
                     <tbody>
@@ -264,6 +295,7 @@ class EmployeeList extends React.Component {
                         <th>First Name</th>
                         <th>Last Name</th>
                         <th>Description</th>
+                        <th>Manager</th>
                         <th></th>
                         <th></th>
                     </tr>
@@ -359,7 +391,7 @@ class UpdateDialog extends React.Component {
         var dialogId = "updateEmployee-" + this.props.employee.entity._links.self.href;
 
         return (
-            <div key={this.props.employee.entity._links.self.href}>
+            <div>
                 <a href={"#" + dialogId}>Update</a>
                 <div id={dialogId} className="modalDialog">
                     <div>
@@ -395,6 +427,7 @@ class Employee extends React.Component {
                 <td>{this.props.employee.entity.firstName}</td>
                 <td>{this.props.employee.entity.lastName}</td>
                 <td>{this.props.employee.entity.description}</td>
+                <td>{this.props.employee.entity.manager.name}</td>
                 <td>
                     <UpdateDialog employee={this.props.employee}
                                   attributes={this.props.attributes}
